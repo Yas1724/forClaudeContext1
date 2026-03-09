@@ -742,10 +742,13 @@ function WeekStrip({ activeDay, setActiveDay }) {
           date.setDate(today.getDate() - dow + i);
           const isToday = i === dow;
           const isActive = i === activeDay;
+          const isFuture = i > dow;
           return (
-            <button key={d} onClick={() => setActiveDay(i)} style={{
-              flex: 1, padding: "8px 0", borderRadius: 10, border: "none", cursor: "pointer",
+            <button key={d} onClick={() => !isFuture && setActiveDay(i)} style={{
+              flex: 1, padding: "8px 0", borderRadius: 10, border: "none",
+              cursor: isFuture ? "not-allowed" : "pointer",
               background: isActive ? t.weekActiveBg : t.weekInactiveBg,
+              opacity: isFuture ? 0.3 : 1,
             }}>
               <div style={{ fontSize: 9, fontWeight: 800, color: isActive ? t.weekActiveText : t.textMuted, letterSpacing: 0.5, marginBottom: 4 }}>{d}</div>
               <div style={{ fontSize: 13, fontWeight: 900, color: isActive ? t.weekActiveText : isToday ? t.accent : t.weekInactiveText, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{date.getDate()}</div>
@@ -1090,9 +1093,17 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
 
       <div style={{ height: 1, background: t.divider, margin: "22px 24px 0" }} />
 
-      <div style={{ padding: "0 24px" }}>
-        <MealSearchPanel onAdd={addMeal} setToast={setToast} />
-      </div>
+      {activeDay === (new Date().getDay() + 6) % 7 ? (
+        <div style={{ padding: "0 24px" }}>
+          <MealSearchPanel onAdd={addMeal} setToast={setToast} />
+        </div>
+      ) : (
+        <div style={{ padding: "22px 24px 0", textAlign: "center" }}>
+          <p style={{ fontSize: 12, color: t.textMuted, fontWeight: 600 }}>
+            Viewing past day — log meals on today only
+          </p>
+        </div>
+      )}
 
       {meals.length > 0 && (
         <div style={{ padding: "0 24px", marginTop: 22 }}>
