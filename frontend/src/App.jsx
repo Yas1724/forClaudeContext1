@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 
 const API       = "http://localhost:3000/api/auth";
 const PROFILE   = "http://localhost:3000/api/profile";
@@ -351,12 +352,21 @@ function Toast({ msg, type, onClose }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  AUTH SCREENS
 // ─────────────────────────────────────────────────────────────────────────────
-function LoginScreen({ onSwitch, onForgot, setToast, setUser }) {
+function LoginScreen({ setToast, setUser }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
+  const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.successMsg) {
+      setToast({ msg: location.state.successMsg, type: "success" });
+      window.history.replaceState({}, ""); // clear state so it doesn't show again on refresh
+    }
+  }, []);
   const handle = async () => {
     if (!email || !password) return setToast({ msg: "Please fill all fields", type: "error" });
     setLoading(true);
@@ -371,26 +381,28 @@ function LoginScreen({ onSwitch, onForgot, setToast, setUser }) {
         <SocialRow />
         <Or />
         <Input type="email" value={email} onChange={setEmail} placeholder="Email address" />
-        <Input type="password" value={password} onChange={setPassword} placeholder="Password" />
+        <Input type="password" value={password} onChange={setPassword} placeholder="Password (min 8 characters)" />
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onForgot} style={{ background: "none", border: "none", color: t.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Forgot password?</button>
+          <button onClick={() => navigate("/forgot-password")} style={{ background: "none", border: "none", color: t.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Forgot password?</button>
         </div>
         <Btn onClick={handle} loading={loading}>Login now ›</Btn>
-        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Don't have an account? <LinkBtn onClick={() => onSwitch("signup")}>Sign up</LinkBtn></p>
+        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Don't have an account? <LinkBtn onClick={() => navigate("/signup")}>Sign up</LinkBtn></p>
       </div>
     </Card>
   );
 }
 
-function SignupScreen({ onSwitch, setToast, onVerify }) {
+function SignupScreen({ setToast, onVerify }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const handle = async () => {
     if (!name || !email || !password) return setToast({ msg: "All fields are required", type: "error" });
+    if (password.length < 8) return setToast({ msg: "Password must be at least 8 characters", type: "error" });
     setLoading(true);
     const data = await apiFetch(API, "/signup", { name, email, password });
     setLoading(false);
@@ -406,15 +418,18 @@ function SignupScreen({ onSwitch, setToast, onVerify }) {
         <Input type="email" value={email} onChange={setEmail} placeholder="Email address" />
         <Input type="password" value={password} onChange={setPassword} placeholder="Password" />
         <Btn onClick={handle} loading={loading}>Create account ›</Btn>
-        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Already have an account? <LinkBtn onClick={() => onSwitch("login")}>Sign In</LinkBtn></p>
+        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Already have an account? <LinkBtn onClick={() => navigate("/")}>Sign In</LinkBtn></p>
       </div>
     </Card>
   );
 }
 
-function VerifyScreen({ email, onSwitch, setToast, setUser }) {
+function VerifyScreen({ setToast, setUser }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
+  const navigate = useNavigate();
+  const location = useLocation();
+  const email = location.state?.email || "";
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const refs = useRef([]);
@@ -445,15 +460,16 @@ function VerifyScreen({ email, onSwitch, setToast, setUser }) {
           ))}
         </div>
         <Btn onClick={handle} loading={loading}>Verify & Continue ›</Btn>
-        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Back to <LinkBtn onClick={() => onSwitch("login")}>Sign In</LinkBtn></p>
+        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Back to <LinkBtn onClick={() => navigate("/")}>Sign In</LinkBtn></p>
       </div>
     </Card>
   );
 }
 
-function ForgotScreen({ onSwitch, setToast }) {
+function ForgotScreen({ setToast }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -466,7 +482,7 @@ function ForgotScreen({ onSwitch, setToast }) {
     else setToast({ msg: data.message || "Not found", type: "error" });
   };
   return (
-    <Card title="Forgot Password?" subtitle="Enter your email and we'll send a reset link.">
+    <Card title="Forgot Password?" subtitle="Enter your email and we will send a reset link.">
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {sent
           ? <div style={{ textAlign: "center", padding: "14px 0" }}>
@@ -475,7 +491,7 @@ function ForgotScreen({ onSwitch, setToast }) {
             </div>
           : <Input type="email" value={email} onChange={setEmail} placeholder="Email address" />}
         {!sent && <Btn onClick={handle} loading={loading}>Send Reset Link ›</Btn>}
-        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Remembered it? <LinkBtn onClick={() => onSwitch("login")}>Sign In</LinkBtn></p>
+        <p style={{ textAlign: "center", fontSize: 13, color: t.textSecondary, margin: 0 }}>Remembered it? <LinkBtn onClick={() => navigate("/")}>Sign In</LinkBtn></p>
       </div>
     </Card>
   );
@@ -486,12 +502,13 @@ function ResetScreen({ token, onSwitch, setToast }) {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const handle = async () => {
-    if (!password || password !== confirm) return setToast({ msg: "Passwords don't match", type: "error" });
+    if (!password || password !== confirm) return setToast({ msg: "Passwords do not match", type: "error" });
+    if (password.length < 8) return setToast({ msg: "Password must be at least 8 characters", type: "error" });
     setLoading(true);
     const res = await fetch(`${API}/reset-password/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ password }) });
     const data = await res.json();
     setLoading(false);
-    if (data.success) { setToast({ msg: "Password reset!", type: "success" }); onSwitch("login"); }
+    if (data.success) { setToast({ msg: "Password reset! Please login.", type: "success" }); onSwitch(); }
     else setToast({ msg: data.msg || "Failed", type: "error" });
   };
   return (
@@ -725,34 +742,102 @@ function MacroPill({ label, eaten, target, color }) {
   );
 }
 
-function WeekStrip({ activeDay, setActiveDay }) {
+function WeekStrip({ activeDay, setActiveDay, weekOffset, setWeekOffset, todayDow }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
   const today = new Date();
   const days  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const dow   = (today.getDay() + 6) % 7;
+
+  // Touch swipe handling
+  const touchStartX = useRef(null);
+  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) < 40) return; // ignore small swipes
+    if (diff > 0 && weekOffset < 0) setWeekOffset(w => w + 1); // swipe left = forward in time
+    if (diff < 0) setWeekOffset(w => w - 1); // swipe right = back in time
+    touchStartX.current = null;
+  };
+
+  // Get the Monday of the displayed week
+  const getWeekStart = () => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - todayDow + (weekOffset * 7));
+    return d;
+  };
+
+  const weekStart = getWeekStart();
+  const isCurrentWeek = weekOffset === 0;
+
+  // Header: show month(s) of the displayed week
+  const firstDay = new Date(weekStart);
+  const lastDay  = new Date(weekStart); lastDay.setDate(weekStart.getDate() + 6);
+  const headerLabel = firstDay.getMonth() === lastDay.getMonth()
+    ? `${firstDay.toLocaleString("default", { month: "long" })} ${firstDay.getFullYear()}`
+    : `${firstDay.toLocaleString("default", { month: "short" })} – ${lastDay.toLocaleString("default", { month: "short" })} ${lastDay.getFullYear()}`;
+
   return (
-    <div>
-      <div style={{ fontSize: 10, color: t.textMuted, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
-        {today.toLocaleString("default", { month: "long" })} {today.getFullYear()}
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      style={{ userSelect: "none" }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => setWeekOffset(w => w - 1)} style={{
+            background: "none", border: `1px solid ${t.cardBorder}`, borderRadius: 6,
+            color: t.textMuted, cursor: "pointer", padding: "2px 7px", fontSize: 13,
+            lineHeight: 1.6, fontFamily: "inherit",
+          }}>‹</button>
+          <span style={{ fontSize: 10, color: t.textMuted, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase" }}>
+            {headerLabel}
+          </span>
+          <button onClick={() => weekOffset < 0 && setWeekOffset(w => w + 1)} style={{
+            background: "none", border: `1px solid ${t.cardBorder}`, borderRadius: 6,
+            color: weekOffset < 0 ? t.textMuted : t.textMuted,
+            cursor: weekOffset < 0 ? "pointer" : "not-allowed",
+            padding: "2px 7px", fontSize: 13, lineHeight: 1.6, fontFamily: "inherit",
+            opacity: weekOffset < 0 ? 1 : 0.3,
+          }}>›</button>
+        </div>
+        {!isCurrentWeek && (
+          <button onClick={() => {
+            if (weekOffset === 0 && activeDay === todayDow) return;
+            setWeekOffset(0);
+            if (activeDay === todayDow) {
+              // weekOffset changed but activeDay same — force refetch by toggling
+              setActiveDay(-1);
+              setTimeout(() => setActiveDay(todayDow), 0);
+            } else {
+              setActiveDay(todayDow);
+            }
+          }} style={{
+            background: t.accentGrad, border: "none", borderRadius: 8,
+            color: "#fff", cursor: "pointer", padding: "4px 10px",
+            fontSize: 10, fontWeight: 800, fontFamily: "inherit", letterSpacing: 0.5,
+          }}>Today ↩</button>
+        )}
       </div>
+
       <div style={{ display: "flex", gap: 4 }}>
         {days.map((d, i) => {
-          const date = new Date(today);
-          date.setDate(today.getDate() - dow + i);
-          const isToday = i === dow;
-          const isActive = i === activeDay;
-          const isFuture = i > dow;
+          const date = new Date(weekStart);
+          date.setDate(weekStart.getDate() + i);
+          const isToday   = date.toDateString() === today.toDateString();
+          const isActive  = i === activeDay && weekOffset === weekOffset; // always true, kept for clarity
+          const isFuture  = date > today;
+          const isActiveSel = i === activeDay;
           return (
             <button key={d} onClick={() => !isFuture && setActiveDay(i)} style={{
               flex: 1, padding: "8px 0", borderRadius: 10, border: "none",
               cursor: isFuture ? "not-allowed" : "pointer",
-              background: isActive ? t.weekActiveBg : t.weekInactiveBg,
+              background: isActiveSel ? t.weekActiveBg : t.weekInactiveBg,
               opacity: isFuture ? 0.3 : 1,
             }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: isActive ? t.weekActiveText : t.textMuted, letterSpacing: 0.5, marginBottom: 4 }}>{d}</div>
-              <div style={{ fontSize: 13, fontWeight: 900, color: isActive ? t.weekActiveText : isToday ? t.accent : t.weekInactiveText, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{date.getDate()}</div>
-              {isToday && !isActive && <div style={{ width: 3, height: 3, borderRadius: "50%", background: t.accent, margin: "3px auto 0" }} />}
+              <div style={{ fontSize: 9, fontWeight: 800, color: isActiveSel ? t.weekActiveText : t.textMuted, letterSpacing: 0.5, marginBottom: 4 }}>{d}</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: isActiveSel ? t.weekActiveText : isToday ? t.accent : t.weekInactiveText, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{date.getDate()}</div>
+              {isToday && !isActiveSel && <div style={{ width: 3, height: 3, borderRadius: "50%", background: t.accent, margin: "3px auto 0" }} />}
             </button>
           );
         })}
@@ -774,10 +859,12 @@ function MealEntry({ meal, onRemove }) {
           <span>P:{meal.proteinG}g</span><span>C:{meal.carbsG}g</span><span>F:{meal.fatG}g</span>
         </div>
       </div>
-      <button onClick={() => onRemove(meal.id)} style={{ background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 16, padding: "4px 8px", flexShrink: 0 }}
-        onMouseEnter={e => e.target.style.color = "#dc2626"}
-        onMouseLeave={e => e.target.style.color = t.textMuted}
-      >✕</button>
+      {onRemove && (
+        <button onClick={() => onRemove(meal.id)} style={{ background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 16, padding: "4px 8px", flexShrink: 0 }}
+          onMouseEnter={e => e.target.style.color = "#dc2626"}
+          onMouseLeave={e => e.target.style.color = t.textMuted}
+        >✕</button>
+      )}
     </div>
   );
 }
@@ -824,6 +911,7 @@ function MealSearchPanel({ onAdd, setToast }) {
   const [qty, setQty] = useState(1);
   const [unit, setUnit] = useState("piece");
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [raw, setRaw] = useState(null);
   const [pending, setPending] = useState(null);
   const inputRef = useRef();
@@ -843,13 +931,17 @@ function MealSearchPanel({ onAdd, setToast }) {
         setRaw(data.result);
         setPending(scaleMacros(data.result, toGrams(Number(qty) || 1, unit, data.result.portion_g)));
       } else { setToast({ msg: data.message || "Not found. Try a different name.", type: "error" }); }
-    } catch { setToast({ msg: "Nutrition service unavailable", type: "error" }); }
-    setLoading(false);
+    } catch {
+      setToast({ msg: "Nutrition service unavailable. Please try again.", type: "error" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ── FIXED: saves to DB before adding to local state ───────────────────────
+  // ── Saves to DB, prevents double-tap duplicates ──────────────────────────
   const confirm = async () => {
-    if (!pending) return;
+    if (!pending || confirming || Number(qty) <= 0) return;
+    setConfirming(true);
     try {
       await apiFetch(FOODLOG, "", {
         dishName:  pending.dishName,
@@ -862,16 +954,20 @@ function MealSearchPanel({ onAdd, setToast }) {
         source:    pending.source,
         loggedVia: "search",
       });
+      onAdd({ ...pending, id: Date.now() });
+      setRaw(null); setPending(null); setQuery(""); setQty(1); setUnit("piece");
+      inputRef.current?.focus();
     } catch (e) {
       console.error("Failed to save to DB:", e);
+      setToast({ msg: "Failed to log meal. Please try again.", type: "error" });
+    } finally {
+      setConfirming(false);
     }
-    onAdd({ ...pending, id: Date.now() });
-    setRaw(null); setPending(null); setQuery(""); setQty(1); setUnit("piece");
-    inputRef.current?.focus();
   };
 
   const dismiss = () => { setRaw(null); setPending(null); setQuery(""); setQty(1); setUnit("piece"); };
   const canSearch = query.trim() && !loading;
+  const canConfirm = pending && !confirming && Number(qty) > 0 && (pending.calories > 0 || pending.proteinG > 0);
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -959,11 +1055,15 @@ function MealSearchPanel({ onAdd, setToast }) {
           </div>
           {pending.source && <div style={{ fontSize: 10, color: t.textMuted, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Source: {pending.source}</div>}
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={confirm} style={{
-              flex: 1, background: t.accentGrad, border: "none", borderRadius: 10, padding: "11px",
+            <button onClick={confirm} disabled={!canConfirm} style={{
+              flex: 1, background: !canConfirm ? t.textMuted : t.accentGrad,
+              border: "none", borderRadius: 10, padding: "11px",
               fontWeight: 800, fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif",
-              cursor: "pointer", color: t.accentText, boxShadow: `0 4px 14px ${t.accentGlow}`,
-            }}>+ Add to Log</button>
+              cursor: !canConfirm ? "not-allowed" : "pointer",
+              color: t.accentText,
+              boxShadow: !canConfirm ? "none" : `0 4px 14px ${t.accentGlow}`,
+              opacity: !canConfirm ? 0.7 : 1,
+            }}>{confirming ? "Adding..." : !canConfirm && Number(qty) <= 0 ? "Enter qty > 0" : "+ Add to Log"}</button>
             <button onClick={dismiss} style={{
               background: t.btnSecBg, border: `1px solid ${t.btnSecBorder}`, borderRadius: 10,
               padding: "11px 14px", color: t.btnSecText, cursor: "pointer",
@@ -984,17 +1084,57 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
   const t = THEMES[theme];
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [meals, setMeals] = useState([]);
-  const [activeDay, setActiveDay] = useState((new Date().getDay() + 6) % 7);
+  const getTodayDow = () => (new Date().getDay() + 6) % 7;
+  const [todayDow, setTodayDow] = useState(getTodayDow);
+  const [activeDay, setActiveDay] = useState(() => getTodayDow());
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  // ── Auto-refresh todayDow at midnight ─────────────────────────────────────
+  useEffect(() => {
+    const getMsUntilMidnight = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      return midnight - now;
+    };
+    let timeout;
+    const scheduleMidnightRefresh = () => {
+      timeout = setTimeout(() => {
+        const newDow = getTodayDow();
+        setTodayDow(newDow);
+        setActiveDay(newDow);
+        setWeekOffset(0);
+        scheduleMidnightRefresh(); // reschedule for next midnight
+      }, getMsUntilMidnight());
+    };
+    scheduleMidnightRefresh();
+    return () => clearTimeout(timeout);
+  }, []);
 
   const targets   = profileData?.dailyTargets || {};
   const profile   = profileData?.profile    || {};
   const goalLabel = GOALS.find(g => g.value === profile.goal)?.label || "Your Goal";
 
-  // ── Load today's meals from DB on mount ───────────────────────────────────
+  const isCurrentWeek = weekOffset === 0;
+  const isTodaySelected = isCurrentWeek && activeDay === todayDow;
+
+  // ── Get date string for any day index + week offset ───────────────────────
+  const getDateForDay = (dayIndex) => {
+    const today = new Date();
+    const dow   = (today.getDay() + 6) % 7;
+    const date  = new Date(today);
+    date.setDate(today.getDate() - dow + dayIndex + (weekOffset * 7));
+    return date.toISOString().split("T")[0]; // YYYY-MM-DD
+  };
+
+  // ── Load meals whenever activeDay or weekOffset changes ───────────────────
   useEffect(() => {
-    const fetchTodayLogs = async () => {
+    const fetchLogs = async () => {
+      setLogsLoading(true);
       try {
-        const data = await apiFetch(FOODLOG, "/dashboard", undefined, "GET");
+        const date = getDateForDay(activeDay);
+        const data = await apiFetch(FOODLOG, `/dashboard?date=${date}`, undefined, "GET");
         if (data.success) {
           setMeals(data.logs.map(log => ({
             id:       log.id,
@@ -1006,11 +1146,13 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
           })));
         }
       } catch (e) {
-        console.error("Failed to load today's logs:", e);
+        console.error("Failed to load logs:", e);
+      } finally {
+        setLogsLoading(false);
       }
     };
-    fetchTodayLogs();
-  }, []);
+    fetchLogs();
+  }, [activeDay, weekOffset]);
 
 
 
@@ -1033,12 +1175,15 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
 
   // ── Delete from DB + remove from local state ──────────────────────────────
   const removeMeal = async (id) => {
+    if (!window.confirm("Remove this meal from your log?")) return;
     try {
       await apiFetch(FOODLOG, `/${id}`, undefined, "DELETE");
+      setMeals(prev => prev.filter(m => m.id !== id));
+      setToast({ msg: "Meal removed from log", type: "success" });
     } catch (e) {
       console.error("Failed to delete log:", e);
+      setToast({ msg: "Failed to remove meal", type: "error" });
     }
-    setMeals(prev => prev.filter(m => m.id !== id));
   };
 
   const handleLogout = async () => {
@@ -1078,7 +1223,7 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
       </div>
 
       <div style={{ padding: "18px 24px 0" }}>
-        <WeekStrip activeDay={activeDay} setActiveDay={setActiveDay} />
+        <WeekStrip activeDay={activeDay} setActiveDay={setActiveDay} weekOffset={weekOffset} setWeekOffset={setWeekOffset} todayDow={todayDow} />
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "26px 24px 0" }}>
@@ -1093,24 +1238,43 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
 
       <div style={{ height: 1, background: t.divider, margin: "22px 24px 0" }} />
 
-      {activeDay === (new Date().getDay() + 6) % 7 ? (
+      {isTodaySelected ? (
         <div style={{ padding: "0 24px" }}>
           <MealSearchPanel onAdd={addMeal} setToast={setToast} />
         </div>
       ) : (
         <div style={{ padding: "22px 24px 0", textAlign: "center" }}>
           <p style={{ fontSize: 12, color: t.textMuted, fontWeight: 600 }}>
-            Viewing past day — log meals on today only
+            {(() => {
+              const d = new Date();
+              d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + activeDay + (weekOffset * 7));
+              return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+            })()}
+          </p>
+          <p style={{ fontSize: 11, color: t.textMuted, marginTop: 4 }}>
+            Read-only — log meals on today only
           </p>
         </div>
       )}
 
-      {meals.length > 0 && (
+      {logsLoading ? (
+        <div style={{ padding: "22px 24px 0", textAlign: "center" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}>
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
+          </svg>
+        </div>
+      ) : meals.length > 0 ? (
         <div style={{ padding: "0 24px", marginTop: 22 }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: t.textMuted, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 4 }}>
-            Today's Log — {meals.length} item{meals.length !== 1 ? "s" : ""}
+            {isTodaySelected ? "Today" : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][activeDay]}'s Log — {meals.length} item{meals.length !== 1 ? "s" : ""}
           </div>
-          {meals.map(m => <MealEntry key={m.id} meal={m} onRemove={removeMeal} />)}
+          {meals.map(m => <MealEntry key={m.id} meal={m} onRemove={isTodaySelected ? removeMeal : undefined} />)}
+        </div>
+      ) : (
+        <div style={{ padding: "18px 24px 0", textAlign: "center" }}>
+          <p style={{ fontSize: 12, color: t.textMuted, fontWeight: 600 }}>
+            {isTodaySelected ? "No meals logged yet today" : "No meals logged on this day"}
+          </p>
         </div>
       )}
 
@@ -1160,17 +1324,37 @@ function Bg() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  APP ROOT
+//  PROTECTED ROUTE
 // ─────────────────────────────────────────────────────────────────────────────
-export default function App() {
+function ProtectedRoute({ children, user }) {
+  if (!user) return <Navigate to="/" replace />;
+  return children;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RESET PASSWORD PAGE (reads token from URL params)
+// ─────────────────────────────────────────────────────────────────────────────
+function ResetPasswordPage({ setToast }) {
+  const { token } = useParams();
+  const navigate  = useNavigate();
+  const handleSuccess = () => {
+    navigate("/", { state: { successMsg: "Password reset! Please login with your new password." } });
+  };
+  return <ResetScreen token={token} onSwitch={handleSuccess} setToast={setToast} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  APP INNER (has access to useNavigate)
+// ─────────────────────────────────────────────────────────────────────────────
+function AppInner() {
+  const navigate = useNavigate();
   const [themeMode, setThemeModeState] = useState(() => {
     try { return localStorage.getItem("nutriai-theme") || "dark"; } catch { return "dark"; }
   });
-  const [screen, setScreen]           = useState("login");
   const [toast, setToast]             = useState({ msg: "", type: "success" });
   const [user, setUser]               = useState(null);
-  const [verifyEmail, setVerifyEmail] = useState("");
   const [profileData, setProfileData] = useState(null);
+  const [initializing, setInitializing] = useState(true);
 
   const setThemeMode = (m) => {
     setThemeModeState(m);
@@ -1178,8 +1362,6 @@ export default function App() {
   };
 
   const t = THEMES[themeMode];
-  const resetToken = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("token");
-  useEffect(() => { if (resetToken) setScreen("reset-password"); }, []);
 
   // ── Restore session on page refresh ───────────────────────────────────────
   useEffect(() => {
@@ -1190,45 +1372,68 @@ export default function App() {
           setUser({ email: data.user.email });
           if (data.user.profile?.isOnboarded) {
             setProfileData(data.user);
-            setScreen("dashboard");
+            navigate("/dashboard", { replace: true });
           } else {
-            setScreen("onboarding");
+            navigate("/onboarding", { replace: true });
           }
         }
       } catch {
         // no session, stay on login
+      } finally {
+        setInitializing(false);
       }
     };
-    if (!resetToken) restoreSession();
+    if (!window.location.pathname.startsWith("/reset-password")) {
+      restoreSession();
+    } else {
+      setInitializing(false);
+    }
   }, []);
 
   const handleUser = async (u) => {
     setUser(u);
     try {
       const data = await apiFetch(PROFILE, "", undefined, "GET");
-      if (data.success && data.user?.profile?.isOnboarded) { setProfileData(data.user); setScreen("dashboard"); }
-      else setScreen("onboarding");
-    } catch { setScreen("onboarding"); }
+      if (data.success && data.user?.profile?.isOnboarded) {
+        setProfileData(data.user);
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/onboarding", { replace: true });
+      }
+    } catch {
+      navigate("/onboarding", { replace: true });
+    }
   };
 
   const handleOnboardingDone = (data) => {
     setProfileData({ profile: data.profile, dailyTargets: data.dailyTargets });
-    setScreen("dashboard");
+    navigate("/dashboard", { replace: true });
   };
 
-  const isDashboard = screen === "dashboard";
-
-  const renderScreen = () => {
-    switch (screen) {
-      case "signup":          return <SignupScreen onSwitch={setScreen} setToast={setToast} onVerify={e => { setVerifyEmail(e); setScreen("verify-email"); }} />;
-      case "verify-email":    return <VerifyScreen email={verifyEmail} onSwitch={setScreen} setToast={setToast} setUser={handleUser} />;
-      case "forgot-password": return <ForgotScreen onSwitch={setScreen} setToast={setToast} />;
-      case "reset-password":  return <ResetScreen token={resetToken} onSwitch={setScreen} setToast={setToast} />;
-      case "onboarding":      return <OnboardingScreen onDone={handleOnboardingDone} setToast={setToast} />;
-      case "dashboard":       return <Dashboard user={user} onLogout={() => { setUser(null); setProfileData(null); setScreen("login"); }} setToast={setToast} profileData={profileData} />;
-      default:                return <LoginScreen onSwitch={setScreen} onForgot={() => setScreen("forgot-password")} setToast={setToast} setUser={handleUser} />;
-    }
+  const handleLogout = async () => {
+    await fetch(`${API}/logout`, { method: "POST", credentials: "include" });
+    setUser(null);
+    setProfileData(null);
+    setToast({ msg: "Logged out", type: "success" });
+    navigate("/", { replace: true });
   };
+
+  const location = useLocation();
+  const isDashboard = location.pathname === "/dashboard";
+
+  if (initializing) return (
+    <ThemeContext.Provider value={{ theme: themeMode, setThemeMode }}>
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <Bg />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}>
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
+        </svg>
+      </div>
+    </ThemeContext.Provider>
+  );
 
   return (
     <ThemeContext.Provider value={{ theme: themeMode, setThemeMode }}>
@@ -1263,10 +1468,52 @@ export default function App() {
         fontFamily: "'Plus Jakarta Sans',sans-serif",
         animation: "fadeUp 0.4s ease",
       }}>
-        {renderScreen()}
+        <Routes>
+          <Route path="/"
+            element={<LoginScreen setToast={setToast} setUser={handleUser} />}
+          />
+          <Route path="/signup"
+            element={<SignupScreen setToast={setToast} onVerify={(email) => navigate("/verify-email", { state: { email } })} />}
+          />
+          <Route path="/verify-email"
+            element={<VerifyScreen setToast={setToast} setUser={handleUser} />}
+          />
+          <Route path="/forgot-password"
+            element={<ForgotScreen setToast={setToast} />}
+          />
+          <Route path="/reset-password/:token"
+            element={<ResetPasswordPage setToast={setToast} />}
+          />
+          <Route path="/onboarding"
+            element={
+              <ProtectedRoute user={user}>
+                <OnboardingScreen onDone={handleOnboardingDone} setToast={setToast} />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/dashboard"
+            element={
+              <ProtectedRoute user={user}>
+                <Dashboard user={user} onLogout={handleLogout} setToast={setToast} profileData={profileData} />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
 
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "" })} />
     </ThemeContext.Provider>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  APP ROOT
+// ─────────────────────────────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppInner />
+    </BrowserRouter>
   );
 }
