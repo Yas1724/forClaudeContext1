@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, createContext, useContext } from "react";
 const API       = "http://localhost:3000/api/auth";
 const PROFILE   = "http://localhost:3000/api/profile";
 const NUTRITION = "http://localhost:3000/api/nutrition";
+const FOODLOG   = "http://localhost:3000/api/food-log";
 
 async function apiFetch(base, path, body, method = "POST") {
   const res = await fetch(`${base}${path}`, {
@@ -16,8 +17,6 @@ async function apiFetch(base, path, body, method = "POST") {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  THEME SYSTEM
-//  light = "Pure White / Clean" (green CTA)
-//  dark  = "Charcoal + Orange / Bold" (orange CTA)
 // ─────────────────────────────────────────────────────────────────────────────
 const ThemeContext = createContext();
 const useTheme = () => useContext(ThemeContext);
@@ -149,9 +148,6 @@ const THEMES = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  THEME TOGGLE — fixed pill button
-// ─────────────────────────────────────────────────────────────────────────────
 function ThemeToggle() {
   const { theme, setThemeMode } = useTheme();
   const t = THEMES[theme];
@@ -175,9 +171,6 @@ function ThemeToggle() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  LOGO + BRAND
-// ─────────────────────────────────────────────────────────────────────────────
 function NutriLogo({ size = 48 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 120 110" fill="none">
@@ -228,9 +221,6 @@ function Brand({ small }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  SHARED UI PRIMITIVES
-// ─────────────────────────────────────────────────────────────────────────────
 function Input({ type = "text", value, onChange, placeholder, min, max }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
@@ -768,16 +758,17 @@ function WeekStrip({ activeDay, setActiveDay }) {
   );
 }
 
+// ── FIXED: uses dishName, proteinG, carbsG, fatG ─────────────────────────────
 function MealEntry({ meal, onRemove }) {
   const { theme } = useTheme();
   const t = THEMES[theme];
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 0", borderBottom: `1px solid ${t.mealBorder}`, animation: "fadeUp 0.25s ease" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: t.mealDishText, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meal.dish}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: t.mealDishText, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meal.dishName}</div>
         <div style={{ fontSize: 11, color: t.mealMetaText, display: "flex", gap: 10 }}>
           <span style={{ color: t.accent, fontWeight: 700 }}>{meal.calories} kcal</span>
-          <span>P:{meal.protein}g</span><span>C:{meal.carbs}g</span><span>F:{meal.fats}g</span>
+          <span>P:{meal.proteinG}g</span><span>C:{meal.carbsG}g</span><span>F:{meal.fatG}g</span>
         </div>
       </div>
       <button onClick={() => onRemove(meal.id)} style={{ background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 16, padding: "4px 8px", flexShrink: 0 }}
@@ -795,6 +786,7 @@ const UNITS = [
   { label: "ml", value: "ml" }, { label: "bowl", value: "bowl" },
   { label: "slice", value: "slice" }, { label: "plate", value: "plate" },
 ];
+
 function toGrams(qty, unit, portion_g) {
   const base = portion_g || 100;
   switch (unit) {
@@ -806,10 +798,20 @@ function toGrams(qty, unit, portion_g) {
     default: return qty * base;
   }
 }
+
+// ── FIXED: output now uses dishName, proteinG, carbsG, fatG ──────────────────
 function scaleMacros(base, consumedGrams) {
   const ratio = consumedGrams / (base.portion_g || 100);
   const r = v => Math.round(v * ratio * 10) / 10;
-  return { dish: base.dish, calories: r(base.calories), protein: r(base.protein), carbs: r(base.carbs), fats: r(base.fats), portion_g: Math.round(consumedGrams), source: base.source };
+  return {
+    dishName:  base.dish,
+    calories:  r(base.calories),
+    proteinG:  r(base.protein),
+    carbsG:    r(base.carbs),
+    fatG:      r(base.fats),
+    portion_g: Math.round(consumedGrams),
+    source:    base.source,
+  };
 }
 
 function MealSearchPanel({ onAdd, setToast }) {
@@ -842,12 +844,29 @@ function MealSearchPanel({ onAdd, setToast }) {
     setLoading(false);
   };
 
-  const confirm = () => {
+  // ── FIXED: saves to DB before adding to local state ───────────────────────
+  const confirm = async () => {
     if (!pending) return;
+    try {
+      await apiFetch(FOODLOG, "", {
+        dishName:  pending.dishName,
+        mealType:  "snack",
+        calories:  pending.calories,
+        proteinG:  pending.proteinG,
+        carbsG:    pending.carbsG,
+        fatG:      pending.fatG,
+        portionG:  pending.portion_g,
+        source:    pending.source,
+        loggedVia: "search",
+      });
+    } catch (e) {
+      console.error("Failed to save to DB:", e);
+    }
     onAdd({ ...pending, id: Date.now() });
     setRaw(null); setPending(null); setQuery(""); setQty(1); setUnit("piece");
     inputRef.current?.focus();
   };
+
   const dismiss = () => { setRaw(null); setPending(null); setQuery(""); setQty(1); setUnit("piece"); };
   const canSearch = query.trim() && !loading;
 
@@ -855,7 +874,6 @@ function MealSearchPanel({ onAdd, setToast }) {
     <div style={{ marginTop: 20 }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: t.textMuted, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 12 }}>Log a Meal</div>
 
-      {/* Search row */}
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         <input ref={inputRef} value={query}
           onChange={e => { setQuery(e.target.value); setRaw(null); setPending(null); }}
@@ -879,7 +897,6 @@ function MealSearchPanel({ onAdd, setToast }) {
         </button>
       </div>
 
-      {/* Qty + units */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", background: t.inputBg, border: `1.5px solid ${t.inputBorder}`, borderRadius: 12, overflow: "hidden" }}>
           <button onClick={() => setQty(q => Math.max(0.5, Number(q) - (unit === "g" || unit === "ml" ? 25 : 0.5)))}
@@ -915,7 +932,8 @@ function MealSearchPanel({ onAdd, setToast }) {
         <div style={{ marginTop: 12, background: t.resultBg, border: `1px solid ${t.resultBorder}`, borderRadius: 14, padding: "14px 16px", animation: "fadeUp 0.2s ease" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: t.textPrimary, marginBottom: 2, textTransform: "capitalize" }}>{pending.dish}</div>
+              {/* FIXED: pending.dishName */}
+              <div style={{ fontSize: 15, fontWeight: 800, color: t.textPrimary, marginBottom: 2, textTransform: "capitalize" }}>{pending.dishName}</div>
               <div style={{ fontSize: 11, color: t.textSecondary }}>{qty} {unit} · {pending.portion_g}g</div>
             </div>
             <div style={{ textAlign: "right" }}>
@@ -924,10 +942,11 @@ function MealSearchPanel({ onAdd, setToast }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            {/* FIXED: pending.proteinG, pending.carbsG, pending.fatG */}
             {[
-              { l: "Protein", v: pending.protein, c: t.accent },
-              { l: "Carbs",   v: pending.carbs,   c: "#eab308" },
-              { l: "Fat",     v: pending.fats,    c: "#ef4444" },
+              { l: "Protein", v: pending.proteinG, c: t.accent },
+              { l: "Carbs",   v: pending.carbsG,   c: "#eab308" },
+              { l: "Fat",     v: pending.fatG,      c: "#ef4444" },
             ].map(m => (
               <div key={m.l} style={{ flex: 1, textAlign: "center", background: t.macroBg, borderRadius: 10, padding: "8px 4px" }}>
                 <div style={{ fontSize: 16, fontWeight: 900, color: m.c, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{m.v}g</div>
@@ -967,15 +986,57 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
   const targets   = profileData?.dailyTargets || {};
   const profile   = profileData?.profile    || {};
   const goalLabel = GOALS.find(g => g.value === profile.goal)?.label || "Your Goal";
-  const totals    = meals.reduce((acc, m) => ({
+
+  // ── Load today's meals from DB on mount ───────────────────────────────────
+  useEffect(() => {
+    const fetchTodayLogs = async () => {
+      try {
+        const data = await apiFetch(FOODLOG, "/dashboard", undefined, "GET");
+        if (data.success) {
+          setMeals(data.logs.map(log => ({
+            id:       log.id,
+            dishName: log.dishName,
+            calories: log.calories,
+            proteinG: log.proteinG,
+            carbsG:   log.carbsG,
+            fatG:     log.fatG,
+          })));
+        }
+      } catch (e) {
+        console.error("Failed to load today's logs:", e);
+      }
+    };
+    fetchTodayLogs();
+  }, []);
+
+
+
+  const r1 = v => Math.round(v * 10) / 10;
+  const rawTotals = meals.reduce((acc, m) => ({
     calories: acc.calories + (Number(m.calories) || 0),
-    protein:  acc.protein  + (Number(m.protein)  || 0),
-    carbs:    acc.carbs    + (Number(m.carbs)     || 0),
-    fat:      acc.fat      + (Number(m.fats)      || 0),
+    protein:  acc.protein  + (Number(m.proteinG) || 0),
+    carbs:    acc.carbs    + (Number(m.carbsG)   || 0),
+    fat:      acc.fat      + (Number(m.fatG)     || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-  const addMeal    = m  => setMeals(prev => [m, ...prev]);
-  const removeMeal = id => setMeals(prev => prev.filter(m => m.id !== id));
+  const totals = {
+    calories: r1(rawTotals.calories),
+    protein:  r1(rawTotals.protein),
+    carbs:    r1(rawTotals.carbs),
+    fat:      r1(rawTotals.fat),
+  };
+
+  const addMeal = m => setMeals(prev => [m, ...prev]);
+
+  // ── Delete from DB + remove from local state ──────────────────────────────
+  const removeMeal = async (id) => {
+    try {
+      await apiFetch(FOODLOG, `/${id}`, undefined, "DELETE");
+    } catch (e) {
+      console.error("Failed to delete log:", e);
+    }
+    setMeals(prev => prev.filter(m => m.id !== id));
+  };
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -992,7 +1053,6 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
       borderRadius: 24, boxShadow: t.cardShadow,
       fontFamily: "'Plus Jakarta Sans',sans-serif", overflow: "hidden",
     }}>
-      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "22px 24px 0" }}>
         <Brand small />
         <button onClick={handleLogout} disabled={logoutLoading} style={{
@@ -1005,7 +1065,6 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
         >{logoutLoading ? "…" : "Sign out"}</button>
       </div>
 
-      {/* Goal chip */}
       <div style={{ padding: "14px 24px 0" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: t.goalChipBg, border: `1px solid ${t.goalChipBorder}`, borderRadius: 99, padding: "5px 14px 5px 10px" }}>
           <span style={{ fontSize: 13 }}>{GOALS.find(g => g.value === profile.goal)?.emoji || "🎯"}</span>
@@ -1015,32 +1074,26 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
         </div>
       </div>
 
-      {/* Week strip */}
       <div style={{ padding: "18px 24px 0" }}>
         <WeekStrip activeDay={activeDay} setActiveDay={setActiveDay} />
       </div>
 
-      {/* Calorie ring */}
       <div style={{ display: "flex", justifyContent: "center", padding: "26px 24px 0" }}>
         <CalRing eaten={totals.calories} target={targets.calories} size={190} />
       </div>
 
-      {/* Macro bars */}
       <div style={{ padding: "18px 24px 0", display: "flex", gap: 20 }}>
         <MacroPill label="Protein" eaten={totals.protein} target={targets.protein} color={t.accent} />
         <MacroPill label="Carbs"   eaten={totals.carbs}   target={targets.carbs}   color="#eab308" />
         <MacroPill label="Fat"     eaten={totals.fat}     target={targets.fat}     color="#ef4444" />
       </div>
 
-      {/* Divider */}
       <div style={{ height: 1, background: t.divider, margin: "22px 24px 0" }} />
 
-      {/* Meal search */}
       <div style={{ padding: "0 24px" }}>
         <MealSearchPanel onAdd={addMeal} setToast={setToast} />
       </div>
 
-      {/* Meal log */}
       {meals.length > 0 && (
         <div style={{ padding: "0 24px", marginTop: 22 }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: t.textMuted, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 4 }}>
@@ -1050,7 +1103,6 @@ function Dashboard({ user, onLogout, setToast, profileData }) {
         </div>
       )}
 
-      {/* Stats footer */}
       <div style={{ padding: "22px 24px 28px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
         {[
           { label: "Target", value: `${targets.calories || "—"} kcal` },
@@ -1117,6 +1169,27 @@ export default function App() {
   const t = THEMES[themeMode];
   const resetToken = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("token");
   useEffect(() => { if (resetToken) setScreen("reset-password"); }, []);
+
+  // ── Restore session on page refresh ───────────────────────────────────────
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const data = await apiFetch(API, "/check-auth", undefined, "GET");
+        if (data.success) {
+          setUser({ email: data.user.email });
+          if (data.user.profile?.isOnboarded) {
+            setProfileData(data.user);
+            setScreen("dashboard");
+          } else {
+            setScreen("onboarding");
+          }
+        }
+      } catch {
+        // no session, stay on login
+      }
+    };
+    if (!resetToken) restoreSession();
+  }, []);
 
   const handleUser = async (u) => {
     setUser(u);
